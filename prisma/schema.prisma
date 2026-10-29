@@ -1,0 +1,439 @@
+// GrowthFlow data model.
+//
+// The datasource provider is rewritten by scripts/prisma-provider.mjs based on
+// DATABASE_URL (file:... -> sqlite, postgres://... -> postgresql). Keep this
+// schema portable: no enums, no Json columns, no provider-specific attributes.
+// Enumerations are plain strings validated in code (see lib/domain.ts), and
+// structured blobs are JSON-encoded strings.
+//
+// Tenancy: every business row carries `subAccountId`. Those models are listed
+// in lib/db/tenant.ts (TENANT_MODELS) and are only reachable through the
+// tenant-scoped client, which injects and enforces the scope on every query.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ---------------------------------------------------------------------------
+// Platform (non-tenant) models
+// ---------------------------------------------------------------------------
+
+model Agency {
+  id          String       @id @default(cuid())
+  name        String
+  createdAt   DateTime     @default(now())
+  subAccounts SubAccount[]
+  users       User[]
+  snapshots   Snapshot[]
+}
+
+model SubAccount {
+  id          String       @id @default(cuid())
+  agencyId    String
+  agency      Agency       @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  name        String
+  timezone    String       @default("UTC")
+  createdAt   DateTime     @default(now())
+  memberships Membership[]
+  invitations Invitation[]
+
+  contacts      Contact[]
+  tags          Tag[]
+  contactTags   ContactTag[]
+  notes         Note[]
+  activities    Activity[]
+  tasks         Task[]
+  pipelines     Pipeline[]
+  stages        Stage[]
+  opportunities Opportunity[]
+  appointments  Appointment[]
+  campaigns     Campaign[]
+  campaignSteps CampaignStep[]
+  enrollments   CampaignEnrollment[]
+  workflows     Workflow[]
+  workflowSteps WorkflowAction[]
+  workflowRuns  WorkflowRun[]
+  messages      Message[]
+  payments      Payment[]
+
+  @@index([agencyId])
+}
+
+model User {
+  id            String       @id @default(cuid())
+  agencyId      String
+  agency        Agency       @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  email         String       @unique
+  name          String
+  passwordHash  String
+  isAgencyAdmin Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+  memberships   Membership[]
+  sessions      Session[]
+
+  @@index([agencyId])
+}
+
+// Sub-account role for a non-agency-admin user: "admin" | "user".
+model Membership {
+  id           String     @id @default(cuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subAccountId String
+  subAccount   SubAccount @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  role         String
+  createdAt    DateTime   @default(now())
+
+  @@unique([userId, subAccountId])
+  @@index([subAccountId])
+}
+
+model Session {
+  id                  String   @id @default(cuid())
+  tokenHash           String   @unique
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Server-side selection of the sub-account being worked in. The client
+  // never sends a subAccountId; it asks to switch, and the server validates.
+  activeSubAccountId  String?
+  expiresAt           DateTime
+  createdAt           DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Invitation {
+  id           String     @id @default(cuid())
+  token        String     @unique
+  email        String
+  role         String
+  subAccountId String
+  subAccount   SubAccount @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  invitedById  String
+  acceptedAt   DateTime?
+  expiresAt    DateTime
+  createdAt    DateTime   @default(now())
+
+  @@index([subAccountId])
+}
+
+// Agency-owned template of a sub-account's structure. `data` is a JSON-encoded
+// SnapshotData (see modules/snapshots/service.ts).
+model Snapshot {
+  id                 String   @id @default(cuid())
+  agencyId           String
+  agency             Agency   @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  name               String
+  sourceSubAccountId String?
+  data               String
+  createdAt          DateTime @default(now())
+
+  @@index([agencyId])
+}
+
+// ---------------------------------------------------------------------------
+// Tenant models (all scoped by subAccountId)
+// ---------------------------------------------------------------------------
+
+model Contact {
+  id            String               @id @default(cuid())
+  subAccountId  String
+  subAccount    SubAccount           @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  firstName     String
+  lastName      String               @default("")
+  email         String?
+  phone         String?
+  company       String?
+  // JSON-encoded Record<string, string>
+  customFields  String               @default("{}")
+  // Lower-cased name/email/phone/company, for portable case-insensitive search.
+  searchText    String               @default("")
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  tags          ContactTag[]
+  notes         Note[]
+  activities    Activity[]
+  tasks         Task[]
+  opportunities Opportunity[]
+  appointments  Appointment[]
+  enrollments   CampaignEnrollment[]
+  workflowRuns  WorkflowRun[]
+  messages      Message[]
+  payments      Payment[]
+
+  @@index([subAccountId, createdAt])
+}
+
+model Tag {
+  id           String       @id @default(cuid())
+  subAccountId String
+  subAccount   SubAccount   @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  name         String
+  contacts     ContactTag[]
+
+  @@unique([subAccountId, name])
+}
+
+model ContactTag {
+  id           String     @id @default(cuid())
+  subAccountId String
+  subAccount   SubAccount @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  contactId    String
+  contact      Contact    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tagId        String
+  tag          Tag        @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@unique([contactId, tagId])
+  @@index([subAccountId, tagId])
+}
+
+model Note {
+  id           String     @id @default(cuid())
+  subAccountId String
+  subAccount   SubAccount @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  contactId    String
+  contact      Contact    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  authorName   String
+  body         String
+  createdAt    DateTime   @default(now())
+
+  @@index([subAccountId, contactId])
+}
+
+// Contact timeline entry. `type` is an ActivityType (lib/domain.ts).
+model Activity {
+  id           String     @id @default(cuid())
+  subAccountId String
+  subAccount   SubAccount @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  contactId    String
+  contact      Contact    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  type         String
+  title        String
+  detail       String?
+  createdAt    DateTime   @default(now())
+
+  @@index([subAccountId, contactId, createdAt])
+  @@index([subAccountId, createdAt])
+}
+
+model Task {
+  id           String     @id @default(cuid())
+  subAccountId String
+  subAccount   SubAccount @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  contactId    String?
+  contact      Contact?   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  title        String
+  dueAt        DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime   @default(now())
+
+  @@index([subAccountId, completedAt])
+}
+
+model Pipeline {
+  id            String        @id @default(cuid())
+  subAccountId  String
+  subAccount    SubAccount    @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  name          String
+  createdAt     DateTime      @default(now())
+  stages        Stage[]
+  opportunities Opportunity[]
+
+  @@index([subAccountId])
+}
+
+model Stage {
+  id            String        @id @default(cuid())
+  subAccountId  String
+  subAccount    SubAccount    @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  pipelineId    String
+  pipeline      Pipeline      @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  name          String
+  position      Int
+  opportunities Opportunity[]
+
+  @@index([subAccountId, pipelineId])
+}
+
+// `status` is an OpportunityStatus; `value` is in cents.
+model Opportunity {
+  id           String     @id @default(cuid())
+  subAccountId String
+  subAccount   SubAccount @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  pipelineId   String
+  pipeline     Pipeline   @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  stageId      String
+  stage        Stage      @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  contactId    String
+  contact      Contact    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  title        String
+  value        Int        @default(0)
+  status       String     @default("open")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([subAccountId, pipelineId])
+}
+
+// `status` is an AppointmentStatus.
+model Appointment {
+  id           String     @id @default(cuid())
+  subAccountId String
+  subAccount   SubAccount @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  contactId    String
+  contact      Contact    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  title        String
+  startAt      DateTime
+  endAt        DateTime
+  status       String     @default("booked")
+  createdAt    DateTime   @default(now())
+
+  @@index([subAccountId, startAt])
+}
+
+// `status` is a CampaignStatus.
+model Campaign {
+  id           String               @id @default(cuid())
+  subAccountId String
+  subAccount   SubAccount           @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  name         String
+  status       String               @default("draft")
+  createdAt    DateTime             @default(now())
+  steps        CampaignStep[]
+  enrollments  CampaignEnrollment[]
+
+  @@index([subAccountId])
+}
+
+// `type` is "email" | "sms" | "wait". Wait steps use waitAmount + waitUnit.
+model CampaignStep {
+  id           String     @id @default(cuid())
+  subAccountId String
+  subAccount   SubAccount @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  campaignId   String
+  campaign     Campaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  position     Int
+  type         String
+  subject      String?
+  body         String?
+  waitAmount   Int?
+  waitUnit     String?
+
+  @@index([subAccountId, campaignId])
+}
+
+// `currentStep` is the index of the next step to execute. `nextRunAt` is null
+// while the row is being processed or once it is finished.
+model CampaignEnrollment {
+  id           String     @id @default(cuid())
+  subAccountId String
+  subAccount   SubAccount @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  campaignId   String
+  campaign     Campaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contactId    String
+  contact      Contact    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  currentStep  Int        @default(0)
+  status       String     @default("active")
+  nextRunAt    DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([campaignId, contactId])
+  @@index([status, nextRunAt])
+}
+
+// `triggerType` is a TriggerType; `triggerConfig` is a JSON-encoded filter
+// (e.g. {"tag":"vip"} or {"stageId":"..."}).
+model Workflow {
+  id            String           @id @default(cuid())
+  subAccountId  String
+  subAccount    SubAccount       @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  name          String
+  triggerType   String
+  triggerConfig String           @default("{}")
+  active        Boolean          @default(false)
+  createdAt     DateTime         @default(now())
+  actions       WorkflowAction[]
+  runs          WorkflowRun[]
+
+  @@index([subAccountId, triggerType, active])
+}
+
+// `type` is an ActionType; `config` is a JSON-encoded ActionConfig.
+model WorkflowAction {
+  id           String     @id @default(cuid())
+  subAccountId String
+  subAccount   SubAccount @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  workflowId   String
+  workflow     Workflow   @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  position     Int
+  type         String
+  config       String     @default("{}")
+
+  @@index([subAccountId, workflowId])
+}
+
+// A persisted execution of a workflow for one contact. `context` is the
+// JSON-encoded trigger payload (e.g. the opportunity that moved).
+model WorkflowRun {
+  id           String     @id @default(cuid())
+  subAccountId String
+  subAccount   SubAccount @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  workflowId   String
+  workflow     Workflow   @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  contactId    String
+  contact      Contact    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  currentStep  Int        @default(0)
+  status       String     @default("active")
+  nextRunAt    DateTime?
+  context      String     @default("{}")
+  lastError    String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([status, nextRunAt])
+  @@index([subAccountId, workflowId])
+}
+
+// The simulated outbox. Every message the messaging adapter "sends" lands here.
+model Message {
+  id           String     @id @default(cuid())
+  subAccountId String
+  subAccount   SubAccount @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  contactId    String?
+  contact      Contact?   @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  channel      String
+  to           String
+  subject      String?
+  body         String
+  status       String
+  provider     String
+  source       String
+  sourceId     String?
+  createdAt    DateTime   @default(now())
+
+  @@index([subAccountId, createdAt])
+}
+
+model Payment {
+  id           String     @id @default(cuid())
+  subAccountId String
+  subAccount   SubAccount @relation(fields: [subAccountId], references: [id], onDelete: Cascade)
+  contactId    String?
+  contact      Contact?   @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  amount       Int
+  currency     String     @default("usd")
+  description  String
+  status       String
+  provider     String
+  externalId   String
+  createdAt    DateTime   @default(now())
+
+  @@index([subAccountId, createdAt])
+}
