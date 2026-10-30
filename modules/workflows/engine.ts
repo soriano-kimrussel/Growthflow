@@ -1,5 +1,5 @@
 import type { TenantDb } from "@/lib/db/tenant";
-import { waitToMs } from "@/lib/domain";
+import { formatWait, waitToMs } from "@/lib/domain";
 import { sendToContact } from "@/modules/messaging/service";
 import { applyStageChange } from "@/modules/opportunities/stage";
 import { attachTag, detachTag } from "@/modules/tags/service";
@@ -240,7 +240,7 @@ async function executeAction(db: TenantDb, input: ActionInput): Promise<Date | n
     case "wait": {
       const config = actionConfigSchemas.wait.parse(input.config);
       const until = new Date(now.getTime() + waitToMs(config.amount, config.unit));
-      await logActivity(db, contactId, "workflow_action", `Waiting ${config.amount} ${config.unit}`, `via ${via}`);
+      await logActivity(db, contactId, "workflow_action", `Waiting ${formatWait(config.amount, config.unit)}`, `via ${via}`);
       return until;
     }
     default:

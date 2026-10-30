@@ -13,6 +13,7 @@ import { addCampaignStep, enrollByTag, processDueEnrollments, setCampaignStatus,
 import { addNote, createContact } from "@/modules/contacts/service";
 import { createOpportunity, moveOpportunity, setOpportunityStatus } from "@/modules/opportunities/service";
 import { createTask } from "@/modules/tasks/service";
+import { captureSnapshot } from "@/modules/snapshots/service";
 import { addAction, createWorkflow, setWorkflowActive } from "@/modules/workflows/service";
 
 const PASSWORD = "password123";
@@ -186,6 +187,16 @@ async function main() {
 
   await seedDental(tenantDb(dental.id), "Dana Brooks");
   await seedFitness(tenantDb(fitness.id), "Pat Morgan");
+
+  // A reusable template on the Agency page.
+  await prisma.snapshot.create({
+    data: {
+      agencyId: agency.id,
+      name: "Dental clinic starter",
+      sourceSubAccountId: dental.id,
+      data: JSON.stringify(await captureSnapshot(tenantDb(dental.id))),
+    },
+  });
 
   console.log(`Seeded "${agency.name}" with 2 sub-accounts.`);
   console.log(`  Agency Admin:       ${admin.email} / ${PASSWORD}`);

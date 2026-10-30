@@ -49,6 +49,11 @@ export function waitToMs(amount: number, unit: WaitUnit): number {
   return amount * unitMs;
 }
 
+/** "1 day", "3 hours" — wait durations for display. */
+export function formatWait(amount: number, unit: string): string {
+  return `${amount} ${amount === 1 ? unit.replace(/s$/, "") : unit}`;
+}
+
 export function isOneOf<T extends string>(list: readonly T[], value: unknown): value is T {
   return typeof value === "string" && (list as readonly string[]).includes(value);
 }

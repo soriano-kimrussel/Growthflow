@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { Inbox, Mail, MessageSquare } from "lucide-react";
 import { RunnerControls } from "@/components/runner-controls";
-import { Badge, Card, contactName, cx, EmptyState, PageHeader } from "@/components/ui";
+import { Avatar, Badge, contactName, cx, EmptyState, PageHeader, PillTabs } from "@/components/ui";
 import { requireTenant } from "@/lib/auth/context";
 import { formatDateTime } from "@/lib/time";
 import { listOutbox } from "@/modules/messaging/service";
@@ -12,55 +13,79 @@ export default async function OutboxPage({ searchParams }: PageProps<"/outbox">)
   const channel = raw === "email" || raw === "sms" ? raw : undefined;
   const { db, subAccount } = await requireTenant();
   const messages = await listOutbox(db, { channel });
-  const tabs = [
-    { label: "All", href: "/outbox", active: !channel },
-    { label: "Email", href: "/outbox?channel=email", active: channel === "email" },
-    { label: "SMS", href: "/outbox?channel=sms", active: channel === "sms" },
-  ];
 
   return (
     <>
       <PageHeader
         title="Outbox"
-        description={`Every message the simulated provider "sent" (provider: ${process.env.MESSAGING_PROVIDER ?? "simulated"}). Nothing leaves this machine.`}
+        description={
+          <span className="flex flex-wrap items-center gap-2">
+            Every message the provider sent.
+            <Badge tone="amber">provider: {process.env.MESSAGING_PROVIDER ?? "simulated"}</Badge>
+            Nothing leaves this machine.
+          </span>
+        }
         actions={<RunnerControls />}
       />
-      <nav className="mb-4 flex gap-2" aria-label="Channel">
-        {tabs.map((t) => (
-          <Link
-            key={t.href}
-            href={t.href}
-            className={cx("rounded-full px-3 py-1 text-sm", t.active ? "bg-indigo-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200")}
-          >
-            {t.label}
-          </Link>
-        ))}
-      </nav>
-      <Card>
+      <div className="mb-4">
+        <PillTabs
+          label="Channel"
+          items={[
+            { label: "All", href: "/outbox", active: !channel },
+            { label: "Email", href: "/outbox?channel=email", active: channel === "email" },
+            { label: "SMS", href: "/outbox?channel=sms", active: channel === "sms" },
+          ]}
+        />
+      </div>
+      <section className="overflow-hidden rounded-2xl border border-line bg-white shadow-card">
         {messages.length ? (
-          <ul className="divide-y divide-slate-100">
-            {messages.map((m) => (
-              <li key={m.id} className="py-3 text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge tone={m.channel === "email" ? "indigo" : "blue"}>{m.channel.toUpperCase()}</Badge>
-                  <span className="font-medium text-slate-800">{m.to}</span>
-                  {m.contact ? (
-                    <Link href={`/contacts/${m.contact.id}`} className="text-xs text-slate-500 hover:underline">
-                      ({contactName(m.contact)})
-                    </Link>
-                  ) : null}
-                  <Badge>{m.source}</Badge>
-                  <span className="ml-auto text-xs text-slate-400">{formatDateTime(m.createdAt, subAccount.timezone)}</span>
-                </div>
-                {m.subject ? <p className="mt-1 font-medium text-slate-700">{m.subject}</p> : null}
-                <p className="mt-0.5 whitespace-pre-line break-words text-slate-600">{m.body}</p>
-              </li>
-            ))}
+          <ul className="divide-y divide-line">
+            {messages.map((m) => {
+              const isEmail = m.channel === "email";
+              const Icon = isEmail ? Mail : MessageSquare;
+              const who = m.contact ? contactName(m.contact) : m.to;
+              return (
+                <li key={m.id} className="flex gap-4 px-5 py-4 hover:bg-slate-50/60">
+                  <div className="relative shrink-0">
+                    <Avatar name={who} />
+                    <span
+                      className={cx(
+                        "absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full text-white ring-2 ring-white",
+                        isEmail ? "bg-sky-500" : "bg-emerald-500",
+                      )}
+                    >
+                      <Icon className="h-2.5 w-2.5" />
+                    </span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      {m.contact ? (
+                        <Link href={`/contacts/${m.contact.id}`} className="font-semibold text-slate-900 hover:text-brand-700">
+                          {who}
+                        </Link>
+                      ) : (
+                        <span className="font-semibold text-slate-900">{who}</span>
+                      )}
+                      <span className="text-xs text-slate-400">{m.to}</span>
+                      <Badge tone={isEmail ? "blue" : "green"}>{m.channel}</Badge>
+                      <Badge>{m.source}</Badge>
+                      <time className="ml-auto text-xs text-slate-400">{formatDateTime(m.createdAt, subAccount.timezone)}</time>
+                    </div>
+                    {m.subject ? <p className="mt-1 text-sm font-medium text-slate-800">{m.subject}</p> : null}
+                    <p className="mt-0.5 line-clamp-3 whitespace-pre-line break-words text-sm text-slate-500">{m.body}</p>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         ) : (
-          <EmptyState title="The outbox is empty">Campaigns, workflows and invitations will drop messages here.</EmptyState>
+          <div className="p-6">
+            <EmptyState title="The outbox is empty" icon={Inbox}>
+              Campaigns, workflows and invitations will drop messages here.
+            </EmptyState>
+          </div>
         )}
-      </Card>
+      </section>
     </>
   );
 }

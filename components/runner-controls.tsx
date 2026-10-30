@@ -1,3 +1,4 @@
+import { FastForward, Play } from "lucide-react";
 import { processDueAction, skipWaitsAction } from "@/modules/workflows/actions";
 import { ActionButton } from "./action-button";
 
@@ -5,8 +6,8 @@ import { ActionButton } from "./action-button";
 export function RunnerControls() {
   return (
     <div className="flex flex-wrap items-start gap-2">
-      <ActionButton action={processDueAction} variant="primary" size="md">
-        Process due steps
+      <ActionButton action={processDueAction} variant="soft" size="md">
+        <Play className="h-3.5 w-3.5" /> Process due steps
       </ActionButton>
       <ActionButton
         action={skipWaitsAction}
@@ -14,7 +15,7 @@ export function RunnerControls() {
         size="md"
         title="Makes every pending wait in this sub-account due now, then processes"
       >
-        Skip waits (demo)
+        <FastForward className="h-3.5 w-3.5" /> Skip waits (demo)
       </ActionButton>
     </div>
   );

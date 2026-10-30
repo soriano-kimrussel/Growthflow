@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { APPOINTMENT_STATUSES, WAIT_UNITS } from "@/lib/domain";
+import { APPOINTMENT_STATUSES, formatWait, WAIT_UNITS } from "@/lib/domain";
 
 // Shared by the engine (server) and the editor UI (client), so no server
 // imports in this file.
@@ -127,7 +127,7 @@ export function describeAction(type: string, config: Record<string, unknown>, st
     case "move_opportunity":
       return `Move opportunity to "${stageNames[String(config.stageId)] ?? "unknown stage"}"`;
     case "wait":
-      return `Wait ${String(config.amount)} ${String(config.unit)}`;
+      return `Wait ${formatWait(Number(config.amount), String(config.unit))}`;
     default:
       return type;
   }

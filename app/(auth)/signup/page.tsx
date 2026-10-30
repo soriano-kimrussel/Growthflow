@@ -8,8 +8,8 @@ export const metadata = { title: "Create an agency" };
 export default function SignupPage() {
   return (
     <>
-      <h1 className="text-lg font-semibold">Create your agency</h1>
-      <p className="mb-4 mt-1 text-sm text-slate-500">You&apos;ll be its Agency Admin. We&apos;ll set up a first sub-account for you.</p>
+      <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Create your agency</h1>
+      <p className="mb-6 mt-1 text-sm text-slate-500">You&apos;ll be its Agency Admin. We&apos;ll set up a first sub-account for you.</p>
       <ActionForm action={signupAction} className="space-y-4">
         <Field label="Agency name" htmlFor="agencyName">
           <Input id="agencyName" name="agencyName" required />
@@ -29,7 +29,7 @@ export default function SignupPage() {
       </ActionForm>
       <p className="mt-4 text-center text-sm text-slate-500">
         Already have an account?{" "}
-        <Link href="/login" className="font-medium text-indigo-600">
+        <Link href="/login" className="font-medium text-brand-600">
           Sign in
         </Link>
       </p>

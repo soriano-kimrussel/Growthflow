@@ -30,6 +30,26 @@ export async function getDashboard(db: TenantDb, now = new Date()) {
     db.payment.aggregate({ where: { status: "succeeded" }, _sum: { amount: true } }),
   ]);
 
+  // Open deals per stage of the first pipeline, for the pipeline chart.
+  const pipeline = await db.pipeline.findFirst({ orderBy: { createdAt: "asc" }, include: { stages: { orderBy: { position: "asc" } } } });
+  const byStage = pipeline
+    ? await db.opportunity.groupBy({
+        by: ["stageId"],
+        where: { pipelineId: pipeline.id, status: "open" },
+        _count: { _all: true },
+        _sum: { value: true },
+      })
+    : [];
+  const stageTotals = new Map(byStage.map((s) => [s.stageId, { count: s._count._all, value: s._sum.value ?? 0 }]));
+  const pipelineStages = pipeline
+    ? {
+        id: pipeline.id,
+        name: pipeline.name,
+        stages: pipeline.stages.map((s) => ({ id: s.id, name: s.name, ...(stageTotals.get(s.id) ?? { count: 0, value: 0 }) })),
+      }
+    : null;
+  const wonValue = await db.opportunity.aggregate({ where: { status: "won" }, _count: { _all: true }, _sum: { value: true } });
+
   const enrollments = Object.fromEntries(enrollmentsByStatus.map((e) => [e.status, e._count._all]));
   const messages = Object.fromEntries(messagesByChannel.map((m) => [m.channel, m._count._all]));
 
@@ -50,5 +70,8 @@ export async function getDashboard(db: TenantDb, now = new Date()) {
     activeRuns,
     openTasks,
     collected: payments._sum.amount ?? 0,
+    pipeline: pipelineStages,
+    wonCount: wonValue._count._all,
+    wonValue: wonValue._sum.value ?? 0,
   };
 }

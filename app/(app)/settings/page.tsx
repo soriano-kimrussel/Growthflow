@@ -1,6 +1,7 @@
 import { ActionButton } from "@/components/action-button";
 import { ActionForm, SubmitButton } from "@/components/action-form";
-import { Card, EmptyState, Field, Input, PageHeader, Select } from "@/components/ui";
+import { Avatar, Badge, Card, EmptyState, Field, Input, PageHeader, Select } from "@/components/ui";
+import { MailPlus, Users } from "lucide-react";
 import { requirePermission } from "@/lib/auth/context";
 import { ROLE_LABELS } from "@/lib/auth/permissions";
 import { formatDate } from "@/lib/time";
@@ -16,14 +17,20 @@ export default async function SettingsPage() {
     <>
       <PageHeader title="Team" description={`People with access to ${ctx.subAccount.name}. Agency admins can access every sub-account.`} />
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card title="Members" className="lg:col-span-2">
+        <Card title="Members" description={`${members.length} with access`} icon={Users} className="lg:col-span-2">
           {members.length ? (
-            <ul className="divide-y divide-slate-100">
+            <ul className="divide-y divide-line">
               {members.map((m) => (
                 <li key={m.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
-                  <div>
-                    <p className="font-medium">{m.user.name}</p>
-                    <p className="text-xs text-slate-500">{m.user.email}</p>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Avatar name={m.user.name} />
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-2 font-medium text-slate-900">
+                        {m.user.name}
+                        {m.user.id === ctx.user.id ? <Badge tone="indigo">you</Badge> : null}
+                      </p>
+                      <p className="truncate text-xs text-slate-500">{m.user.email}</p>
+                    </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <ActionForm action={updateMemberRoleAction.bind(null, m.id)} className="flex gap-2">
@@ -48,7 +55,7 @@ export default async function SettingsPage() {
             <EmptyState title="No members yet" />
           )}
           {invitations.length ? (
-            <div className="mt-4 border-t border-slate-100 pt-4">
+            <div className="mt-4 border-t border-line pt-4">
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Pending invitations</h3>
               <ul className="space-y-1 text-sm">
                 {invitations.map((i) => (
@@ -63,7 +70,7 @@ export default async function SettingsPage() {
             </div>
           ) : null}
         </Card>
-        <Card title="Invite someone">
+        <Card title="Invite someone" icon={MailPlus}>
           <ActionForm action={inviteMemberAction} resetOnSuccess className="space-y-3" aria-label="Invite member">
             <Field label="Email" htmlFor="invite-email">
               <Input id="invite-email" name="email" type="email" required />
@@ -74,7 +81,7 @@ export default async function SettingsPage() {
                 <option value="admin">{ROLE_LABELS.admin}</option>
               </Select>
             </Field>
-            <SubmitButton>Send invitation</SubmitButton>
+            <SubmitButton className="w-full">Send invitation</SubmitButton>
           </ActionForm>
           <p className="mt-3 text-xs text-slate-500">The invitation email is simulated: it lands in the Outbox, and the link is shown here.</p>
         </Card>

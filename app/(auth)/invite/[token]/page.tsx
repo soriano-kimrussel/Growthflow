@@ -16,8 +16,8 @@ export default async function InvitePage({ params }: PageProps<"/invite/[token]"
   const existing = await prisma.user.findUnique({ where: { email: invitation.email }, select: { id: true } });
   return (
     <>
-      <h1 className="text-lg font-semibold">Join {invitation.subAccount.name}</h1>
-      <p className="mb-4 mt-1 text-sm text-slate-500">
+      <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Join {invitation.subAccount.name}</h1>
+      <p className="mb-6 mt-1 text-sm text-slate-500">
         {invitation.subAccount.agency.name} invited <strong>{invitation.email}</strong> as{" "}
         {ROLE_LABELS[invitation.role === "admin" ? "admin" : "user"]}.
       </p>
