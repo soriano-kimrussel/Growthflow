@@ -25,6 +25,7 @@ export default defineConfig({
     stdout: "pipe",
     env: {
       DATABASE_URL: "file:./prisma/e2e.db",
+      DIRECT_URL: "",
       MESSAGING_PROVIDER: "simulated",
       PAYMENTS_PROVIDER: "simulated",
       CRON_SECRET: "e2e-secret",

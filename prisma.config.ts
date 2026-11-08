@@ -8,6 +8,8 @@ export default defineConfig({
     seed: "tsx --conditions=react-server prisma/seed.ts",
   },
   datasource: {
-    url: process.env.DATABASE_URL ?? "file:./prisma/dev.db",
+    // CLI commands (db push) prefer DIRECT_URL: with Supabase, DATABASE_URL is
+    // the transaction pooler (for the app) and DIRECT_URL the session pooler.
+    url: process.env.DIRECT_URL || process.env.DATABASE_URL || "file:./prisma/dev.db",
   },
 });

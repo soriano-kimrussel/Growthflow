@@ -139,23 +139,47 @@ Prisma needs a literal `provider` in the schema, so `scripts/prisma-provider.mjs
 
 ---
 
-## Deploy to Vercel (with Neon or Supabase Postgres)
+## Deploy to Vercel with Supabase Postgres
 
-1. **Create a Postgres database** (free tier) on [Neon](https://neon.tech) or [Supabase](https://supabase.com). Copy its connection string. On Supabase, use the pooled "Transaction" connection string for the app.
-2. **Create the tables and demo data** from your machine, pointing at that database:
-   ```bash
-   DATABASE_URL="postgresql://USER:PASSWORD@HOST/DB?sslmode=require" npm run db:push
-   DATABASE_URL="postgresql://USER:PASSWORD@HOST/DB?sslmode=require" npm run db:seed   # optional
+GrowthFlow only uses Supabase as a hosted Postgres database. Auth, email and payments stay in the app.
+
+1. **Create a Supabase project** (free tier). Pick a region close to your Vercel functions (Vercel's default is Washington, D.C., `iad1`, so use East US). Save the database password.
+2. **Copy two connection strings** from the project's **Connect** dialog, and URL-encode the password if it contains special characters:
+   - **Transaction pooler** (port 6543), for the app at runtime. Append `?uselibpqcompat=true&sslmode=require`.
+   - **Session pooler** (port 5432), for Prisma CLI commands. Append `?sslmode=require`.
+
+   `uselibpqcompat=true&sslmode=require` keeps the connection encrypted the way `psql` does. The `pg` driver otherwise treats `sslmode=require` as full certificate verification, which fails against Supabase's own certificate authority.
+3. **Create the tables** from your machine. In PowerShell:
+   ```powershell
+   $env:DATABASE_URL = "<transaction pooler URL>"
+   $env:DIRECT_URL   = "<session pooler URL>"
+   npm run db:push        # creates the tables (via DIRECT_URL)
+   npm run db:seed        # optional demo data
+   Remove-Item Env:DATABASE_URL, Env:DIRECT_URL
+   npm run db:generate    # switch your local checkout back to SQLite
    ```
-   (On Windows PowerShell: `$env:DATABASE_URL="..."; npm run db:push`.) This rewrites the provider line in `prisma/schema.prisma` to `postgresql`. Run `npm run db:generate` afterwards to switch your local checkout back to SQLite, or just don't commit that one-line change.
-3. **Push the repo to GitHub** and import it in Vercel. The framework preset is detected automatically.
-4. **Set environment variables** in Vercel (Project → Settings → Environment Variables):
-   - `DATABASE_URL`: the Postgres connection string
+   `db:push` rewrites the provider line in `prisma/schema.prisma` to `postgresql`. The last command switches it back, so don't commit that change.
+
+   To run the app locally against Supabase instead, put both URLs in `.env` and run `npm run db:push`, `npm run db:seed` and `npm run dev`. Tests still use throwaway SQLite files, so run `npm run db:generate` after `npm test` or `npm run test:e2e` if you then use a Supabase script directly. `npm run dev` does this for you. `npm run db:reset` erases whichever database `.env` points at.
+4. **Lock down Supabase's auto-generated API.** Supabase exposes the `public` schema over its REST API. GrowthFlow never uses that API, so turn on row-level security with no policies. In the Supabase **SQL Editor**, run:
+   ```sql
+   do $$ declare t record; begin
+     for t in select tablename from pg_tables where schemaname = 'public' loop
+       execute format('alter table public.%I enable row level security', t.tablename);
+     end loop;
+   end $$;
+   ```
+   The app connects as the table owner, so it isn't affected. Re-run this after any schema change that adds a table.
+5. **Push the repo to GitHub** and import it in Vercel.
+6. **Set environment variables** in Vercel (Project → Settings → Environment Variables):
+   - `DATABASE_URL`: the transaction pooler URL from step 2
    - `CRON_SECRET`: a long random string
    - `MESSAGING_PROVIDER=simulated`, `PAYMENTS_PROVIDER=simulated`
    - `APP_URL`: your deployment URL (used in invitation links)
-5. **Deploy.** `postinstall` and `build` run `db:generate`, which sees the Postgres URL and generates a Postgres client.
-6. **Scheduling.** `vercel.json` registers a cron for `/api/runner`. Vercel sends `Authorization: Bearer $CRON_SECRET` automatically. Hobby plans allow daily crons, so the default schedule is daily. On Pro, tighten it (for example `*/5 * * * *`), or call the endpoint from any external scheduler. The in-app **Process due steps** button always works too.
+7. **Deploy.** `postinstall` and `build` run `db:generate`, which sees the Postgres URL and generates a Postgres client.
+8. **Scheduling.** `vercel.json` registers a cron for `/api/runner`. Vercel sends `Authorization: Bearer $CRON_SECRET` automatically. Hobby plans allow daily crons, so the default schedule is daily. On Pro, tighten it (for example `*/5 * * * *`), or call the endpoint from any external scheduler. The in-app **Process due steps** button always works too.
+
+Free Supabase projects pause after a period of inactivity. If the app suddenly can't connect, check whether the project is paused in the Supabase dashboard.
 
 ---
 

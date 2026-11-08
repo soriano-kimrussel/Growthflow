@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "npm run db:generate",
     "dev": "next dev",
     "build": "npm run db:generate && next build",
     "start": "next start",
@@ -13,9 +14,9 @@
     "test:e2e": "playwright test",
     "postinstall": "npm run db:generate",
     "db:generate": "node scripts/prisma-provider.mjs && prisma generate",
-    "db:push": "node scripts/prisma-provider.mjs && prisma db push",
+    "db:push": "npm run db:generate && prisma db push",
     "db:seed": "tsx --conditions=react-server prisma/seed.ts",
-    "db:reset": "node scripts/prisma-provider.mjs && prisma db push --force-reset && npm run db:seed",
+    "db:reset": "npm run db:generate && prisma db push --force-reset && npm run db:seed",
     "setup": "npm run db:push && npm run db:seed",
     "runner": "tsx --conditions=react-server scripts/run-runner.ts"
   },
